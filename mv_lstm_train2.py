@@ -7,17 +7,7 @@
 # - S&P500
 # - アメリカ国債
 # - 日経平均
-# 
-#  #### 長続きして、なおかつある程度安定しているデータがいい？
-#  - 日経平均はアメリカとあんまり関係ないし、戦後からバブルにかけて差が大きすぎる？
-#  - 為替相場は歴史が浅い
-#  - アメリカ国内失業率は月ごとのデータなので使い方がわからない
-#  - ロンドンと香港とかがあればもっと良さそう
-# 
-# ### 利点と展望
-# - 経済の専門的な知識を必要としない
-# - 使用するデータの種類(feature_vector)が多ければ多いほど、人間が気づかない予兆や規則を検出してくれるかもしれない
-# - 予測に役立つ
+# - 日本国債
 # 
 # ### 今後に向けて
 # - Attention、Transformerなど、いろいろな機能を追加/変更していければ
@@ -56,7 +46,7 @@ print(device)
 
 # ### parameters
 
-# In[26]:
+# In[20]:
 
 
 seq_len = 50
@@ -66,7 +56,7 @@ batch_size = 50
 dropout = 0.2
 
 epochs_num = 50
-eps = 0.1
+eps = 0.2
 hidden_size = 20
 num_layers = 2
 input_size = None # 後から
@@ -94,7 +84,20 @@ print(len(train_dataset))
 print(len(test_dataset))
 
 
-# In[7]:
+# In[18]:
+
+
+a = [1.3, 1.23, 1.34, 1.66, 1.56, 1.43, 1.34, 1.46, 1.56, 1.76]
+b = [1.4, 1.33, 1.54, 1.65, 1.56, 1.35, 1.22, 1.32, 1.43, 1.54]
+plt.clf()
+plt.plot(a)
+plt.plot(b)
+plt.show()
+print(np.sum(np.linalg.norm(np.array(a) - np.array(b), ord=2)))
+print(50 * 0.08 ** 2)
+
+
+# In[21]:
 
 
 input_size = dataset.dfs.shape[1]
@@ -113,7 +116,7 @@ criterion = nn.MSELoss()
 optimizer = optim.RMSprop(model.parameters())
 
 train_ls, test_ls = [], []
-train_as, test_as = [], []
+train_as1, test_as1, train_as2, test_as2 = [], [], [], []
 
 
 # ## 訓練
@@ -121,28 +124,13 @@ train_as, test_as = [], []
 # - 少なくともtest_accuracyの値のスケールは正しくない
 # - 大したデータ数でもないのにcpuでやると待ち時間が長すぎる...
 
-# In[27]:
-
-
-"""
-a = [1.3, 1.23, 1.34, 1.66, 1.56, 1.43, 1.34, 1.46, 1.56, 1.76]
-b = [1.4, 1.33, 1.54, 1.65, 1.56, 1.35, 1.22, 1.32, 1.43, 1.54]
-plt.clf()
-plt.plot(a)
-plt.plot(b)
-plt.show()
-print(np.sum(np.linalg.norm(np.array(a) - np.array(b))))
-print(50 * 0.05 ** 2)
-"""
-
-
-# In[11]:
+# In[22]:
 
 
 for epoch in range(epochs_num - 30):
     
     train_loss = 0.0
-    train_accurate_num = 0
+    train_accurate_num1, train_accurate_num2 = 0, 0
     for i, (batch_seqs, batch_labels) in enumerate(train_dataloader):
         optimizer.zero_grad()
         output = model(batch_seqs)
@@ -150,45 +138,54 @@ for epoch in range(epochs_num - 30):
         loss.backward()
         optimizer.step()
         train_loss += loss.data
-        train_accurate_num += np.sum(np.linalg.norm((output.data[:, :, 0] - batch_labels[:, :, 0]).numpy(), ord=2) < eps)
+        # print(np.linalg.norm((output.data[:, :, 0] - batch_labels[:, :, 0]).numpy(), ord=2, axis=1))
+        train_accurate_num1 += np.sum(np.linalg.norm((output.data[:, :, 0] - batch_labels[:, :, 0]).numpy(), ord=2, axis=1) < eps)
+        train_accurate_num2 += np.sum(np.linalg.norm((output.data[:, :, 1] - batch_labels[:, :, 1]).numpy(), ord=2, axis=1) < eps)
 
-    train_accuracy = train_accurate_num / (train_size * predict_len * output_size)
+    train_accuracy1 = train_accurate_num1 / train_size
+    train_accuracy2 = train_accurate_num2 / train_size
     
     test_loss = 0.0
-    test_accurate_num = 0
+    test_accurate_num1, test_accurate_num2 = 0, 0
     for i, (batch_seqs, batch_labels) in enumerate(test_dataloader):
         output = model(batch_seqs)
         loss = criterion(output, batch_labels).to(torch.float32)
         test_loss += loss.data
-        test_accurate_num += np.sum(np.abs((output.data - batch_labels).numpy()) < eps)
 
-    test_accuracy = test_accurate_num / (test_size * predict_len * output_size)
+        test_accurate_num1 += np.sum(np.linalg.norm((output.data[:, :, 0] - batch_labels[:, :, 0]).numpy(), ord=2, axis=1) < eps)
+        test_accurate_num2 += np.sum(np.linalg.norm((output.data[:, :, 1] - batch_labels[:, :, 1]).numpy(), ord=2, axis=1) < eps)
+        
+    test_accuracy1 = test_accurate_num1 / test_size
+    test_accuracy2 = test_accurate_num2 / test_size
 
     train_ls.append(train_loss)
-    train_as.append(train_accuracy)
+    train_as1.append(train_accuracy1)
+    train_as2.append(train_accuracy2)
     test_ls.append(test_loss)
-    test_as.append(test_accuracy)
+    test_as1.append(test_accuracy1)
+    test_as2.append(test_accuracy2)
 
-    print("%d train_loss: %.3f, train_accuracy: %.5f, test_loss: %.3f, test_accuracy: %.5f" %(epoch + 1, train_loss, train_accuracy, test_loss, test_accuracy))
+    print("epoch %d --- [train] loss: %.3f, accuracy1: %.3f, accuracy2: %.3f --- [test] loss: %.3f, accuracy1: %.3f, accuracy2: %.3f" %(epoch + 1, train_loss, train_accuracy1, train_accuracy2, test_loss, test_accuracy1, test_accuracy2))
+    
 
 
-# In[8]:
+# In[23]:
 
 
 img_path = "images/"
-model_name = "mv_lstm_same_seq_continue"
+model_name = "mv_lstm_same_seq_train2"
 using_data = "_data_usgd_ussp_nikkei_jgbcm"
 torch.save(model.state_dict(), model_name + ".pth")
 
 
-# In[17]:
+# In[24]:
 
 
 condition = model_name + using_data  + "_with_seq" + str(seq_len) + "_pred" + str(predict_len) +  "_ep" + str(epochs_num) + "_batch" + str(batch_size)+ "_hs" + str(hidden_size) + "_eps" + str(eps)
 print(condition)
 
 
-# In[18]:
+# In[25]:
 
 
 def plot_results(result, which_result, path, condition, save_or_not=True):
@@ -198,31 +195,43 @@ def plot_results(result, which_result, path, condition, save_or_not=True):
     plt.savefig(path + condition + "_" + which_result + ".png") if save_or_not else plt.show()
 
 
-# In[19]:
+# In[26]:
 
 
 plot_results(train_ls, "train_loss", img_path, condition)
 
 
-# In[20]:
+# In[27]:
 
 
-plot_results(train_as, "train_accuracy", img_path, condition)
+plot_results(train_as1, "train_accuracy1", img_path, condition)
 
 
-# In[21]:
+# In[28]:
+
+
+plot_results(train_as2, "train_accuracy2", img_path, condition)
+
+
+# In[29]:
 
 
 plot_results(test_ls, "test_loss", img_path, condition)
 
 
-# In[22]:
+# In[30]:
 
 
-plot_results(test_as, "test_accuracy", img_path, condition)
+plot_results(test_as1, "test_accuracy1", img_path, condition)
 
 
-# In[28]:
+# In[31]:
+
+
+plot_results(test_as2, "test_accuracy2", img_path, condition)
+
+
+# In[29]:
 
 
 import subprocess

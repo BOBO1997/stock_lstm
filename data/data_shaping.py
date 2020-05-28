@@ -283,15 +283,9 @@ for i in [4,5,6,7,8]:
 df_jgbcm.to_csv("jgbcm_9.csv")
 
 
-# In[248]:
+# In[249]:
 
 
 import subprocess
 subprocess.run(['jupyter', 'nbconvert', '--to', 'python', 'data_shaping.ipynb'])
-
-
-# In[ ]:
-
-
-
 
